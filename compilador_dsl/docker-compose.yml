@@ -1,0 +1,100 @@
+version: '3.8'
+
+services:
+  db-master:
+    image: bitnami/mariadb:latest
+    container_name: dsl_db_master
+    ports:
+      - "3310:3306"
+    environment:
+      - MARIADB_REPLICATION_MODE=master
+      - MARIADB_REPLICATION_USER=repl_user
+      - MARIADB_REPLICATION_PASSWORD=repl_password
+      - MARIADB_ROOT_PASSWORD=root_password
+      - MARIADB_DATABASE=compilador_db
+      - MARIADB_USER=api_user
+      - MARIADB_PASSWORD=api_password
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "/opt/bitnami/scripts/mariadb/healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db-slave:
+    image: bitnami/mariadb:latest
+    container_name: dsl_db_slave
+    ports:
+      - "3311:3306"
+    depends_on:
+      db-master:
+        condition: service_healthy
+    environment:
+      - MARIADB_REPLICATION_MODE=slave
+      - MARIADB_REPLICATION_USER=repl_user
+      - MARIADB_REPLICATION_PASSWORD=repl_password
+      - MARIADB_MASTER_HOST=db-master
+      - MARIADB_MASTER_PORT_NUMBER=3306
+      - MARIADB_MASTER_ROOT_PASSWORD=root_password
+    networks:
+      - app_network
+
+  nodo1:
+    build: .
+    container_name: dsl_nodo1
+    depends_on:
+      db-master:
+        condition: service_healthy
+    environment:
+      - NODE_ID=nodo-1
+      - LLM_MODEL=qwen2.5-coder:3b
+      - DEBUG_MODE=True
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - DB_MASTER_HOST=db-master
+      - DB_SLAVE_HOST=db-slave
+      - DB_USER=api_user
+      - DB_PASS=api_password
+      - DB_NAME=compilador_db
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      app_network:
+        ipv4_address: 192.168.50.10
+
+  nodo2:
+    build: .
+    container_name: dsl_nodo2
+    depends_on:
+      db-master:
+        condition: service_healthy
+    environment:
+      - NODE_ID=nodo-2
+      - LLM_MODEL=qwen2.5-coder:3b
+      - DEBUG_MODE=True
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - DB_MASTER_HOST=db-master
+      - DB_SLAVE_HOST=db-slave
+      - DB_USER=api_user
+      - DB_PASS=api_password
+      - DB_NAME=compilador_db
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      app_network:
+        ipv4_address: 192.168.50.11
+
+  semantic_java:
+    build: ../semantic_analyzer_java
+    container_name: dsl_semantic_java
+    ports:
+      - "8080:8080"
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    ipam:
+      driver: default
+      config:
+        - subnet: 192.168.50.0/24

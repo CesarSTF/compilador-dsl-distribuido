@@ -1,0 +1,14 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.env
+.pytest_cache/
+target/
+*.class
+.idea/
+.vscode/
+*.log
+mysql-data/
+postgres-data/
+*.pdf
